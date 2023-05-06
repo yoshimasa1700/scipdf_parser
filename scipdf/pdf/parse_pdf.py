@@ -8,6 +8,26 @@ import requests
 from bs4 import BeautifulSoup, NavigableString
 from tqdm import tqdm, tqdm_notebook
 
+from lxml import etree
+
+
+def update_head_text(xml_string):
+    tree = etree.fromstring(xml_string.encode('utf-8'))
+
+    # get header tags
+    head_tags = tree.findall(".//{http://www.tei-c.org/ns/1.0}head")
+
+    for head in head_tags:
+        n_value = head.get('n')
+
+        if n_value is None:
+            continue
+
+        # update head text
+        head.text = n_value + '. ' + head.text
+
+    return etree.tostring(tree, encoding='unicode')
+
 
 GROBID_URL = "http://localhost:8070"
 DIR_PATH = op.dirname(op.abspath(__file__))
@@ -106,7 +126,9 @@ def parse_pdf(
         parsed_article = None
 
     if soup and parsed_article is not None:
+        parsed_article = update_head_text(parsed_article)
         parsed_article = BeautifulSoup(parsed_article, "lxml")
+
     return parsed_article
 
 
@@ -271,7 +293,13 @@ def parse_figure_caption(article):
     for figure in figures:
         figure_type = figure.attrs.get("type") or ""
         figure_id = figure.attrs.get("xml:id") or ""
-        label = figure.find("label").text
+        label_tag = figure.find("label")
+
+        if label_tag is None:
+            continue
+
+        label = label_tag.text
+
         if figure_type == "table":
             caption = figure.find("figdesc").text
             data = figure.table.text
